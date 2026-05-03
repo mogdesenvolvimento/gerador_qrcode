@@ -944,16 +944,32 @@ function renderMessagePage(entry) {
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
       text-align: center;
     }
-    .brand {
-      display: inline-block;
+    .message-header {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .brand-badge {
+      display: inline-flex;
+      align-items: center;
       padding: 10px 22px;
       border-radius: 999px;
       background: #efe5da;
       color: #8b5a2b;
-      font-weight: 800;
-      letter-spacing: 0.12em;
+      font-size: clamp(18px, 3vw, 28px);
+      font-weight: 700;
+      letter-spacing: 0.18em;
       text-transform: uppercase;
-      margin-bottom: 24px;
+      white-space: nowrap;
+    }
+    .brand-logo {
+      width: clamp(42px, 8vw, 72px);
+      height: auto;
+      object-fit: contain;
+      flex-shrink: 0;
     }
     .message-image {
       width: 100%;
@@ -967,7 +983,10 @@ function renderMessagePage(entry) {
 </head>
 <body>
   <main class="page">
-    <header class="brand">INCA BAR</header>
+    <header class="message-header">
+      <div class="brand-badge">INCA BAR</div>
+      <img src="/brand/inca-logo.png" alt="Logo Inca Bar" class="brand-logo" />
+    </header>
     <img src="${imageUrl}" alt="Mensagem Inca Bar" class="message-image" />
   </main>
 </body>
