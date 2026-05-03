@@ -34,6 +34,7 @@ No Railway, defina:
 - `NODE_ENV=production`
 
 O Railway injeta `PORT` automaticamente e a aplicacao escuta em `0.0.0.0:$PORT`.
+Se `BASE_URL` ainda nao estiver definida, a aplicacao tenta usar `RAILWAY_PUBLIC_DOMAIN` automaticamente como fallback temporario de deploy.
 
 ## Rodando localmente
 

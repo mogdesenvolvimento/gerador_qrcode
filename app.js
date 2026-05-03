@@ -13,7 +13,8 @@ dotenv.config();
 const app = express();
 
 const PORT = process.env.PORT || 3000;
-const BASE_URL = process.env.BASE_URL ? process.env.BASE_URL.replace(/\/+$/, "") : "";
+const RAW_BASE_URL = process.env.BASE_URL || "";
+const RAILWAY_PUBLIC_DOMAIN = process.env.RAILWAY_PUBLIC_DOMAIN || "";
 const NODE_ENV = process.env.NODE_ENV || "development";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set([
@@ -44,9 +45,25 @@ function logEvent(label, message, details) {
   console.log(`${label} ${message}`);
 }
 
+function resolveBaseUrl() {
+  const normalizedBaseUrl = RAW_BASE_URL.trim().replace(/\/+$/, "");
+  if (normalizedBaseUrl) {
+    return normalizedBaseUrl;
+  }
+
+  const normalizedRailwayDomain = RAILWAY_PUBLIC_DOMAIN.trim().replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  if (normalizedRailwayDomain) {
+    return `https://${normalizedRailwayDomain}`;
+  }
+
+  return "";
+}
+
+const BASE_URL = resolveBaseUrl();
+
 function assertBaseUrl() {
   if (!BASE_URL) {
-    throw new Error("BASE_URL nao configurada. Defina BASE_URL no arquivo .env ou nas variaveis do Railway.");
+    throw new Error("BASE_URL nao configurada e RAILWAY_PUBLIC_DOMAIN indisponivel. Defina BASE_URL no Railway ou no arquivo .env.");
   }
 }
 
