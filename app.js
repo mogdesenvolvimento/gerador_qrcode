@@ -937,53 +937,86 @@ function renderMessagePage(entry) {
       font-family: Inter, sans-serif;
     }
     .page {
-      width: min(92%, 900px);
+      width: min(94vw, 900px);
+      max-width: 94vw;
+      box-sizing: border-box;
       background: white;
       border-radius: 24px;
-      padding: 24px;
+      padding: clamp(16px, 4vw, 28px);
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
       text-align: center;
     }
     .message-header {
       width: 100%;
-      max-width: 820px;
-      margin: 0 auto 12px auto;
-      padding: 14px 26px;
+      max-width: 100%;
+      box-sizing: border-box;
+      padding: 12px 14px;
+      margin: 0 0 16px 0;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
+      gap: 12px;
+      border-radius: 18px;
       border-bottom: 1px solid rgba(139, 90, 43, 0.08);
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 243, 236, 0.92));
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 243, 236, 0.9));
     }
     .brand-badge {
       display: inline-flex;
       align-items: center;
-      padding: 8px 18px;
-      border-radius: 14px;
+      justify-content: center;
+      max-width: calc(100% - 64px);
+      padding: 8px 14px;
+      border-radius: 999px;
       background: #efe5da;
       color: #8b5a2b;
-      font-size: 18px;
+      font-size: clamp(14px, 4vw, 18px);
       font-weight: 700;
-      letter-spacing: 0.14em;
+      letter-spacing: 0.12em;
       line-height: 1;
       white-space: nowrap;
     }
     .brand-logo {
-      width: clamp(38px, 5vw, 56px);
-      height: 56px;
+      width: clamp(38px, 11vw, 52px);
+      height: clamp(38px, 11vw, 52px);
       object-fit: contain;
       flex-shrink: 0;
-      transform: translateY(1px);
     }
     .message-image {
       width: 100%;
+      max-width: 100%;
       height: auto;
       max-height: 85vh;
       object-fit: contain;
       border-radius: 16px;
       box-shadow: 0 12px 30px rgba(0, 0, 0, 0.06);
       margin-top: 10px;
+    }
+    @media (max-width: 480px) {
+      .message-header {
+        padding: 10px 12px;
+        gap: 10px;
+        border-radius: 16px;
+      }
+      .brand-badge {
+        padding: 8px 12px;
+        font-size: 14px;
+        letter-spacing: 0.10em;
+      }
+      .brand-logo {
+        width: 40px;
+        height: 40px;
+      }
+      .page {
+        width: 94vw;
+        max-width: 94vw;
+        padding: 14px;
+        border-radius: 24px;
+      }
+      .message-image {
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+      }
     }
   </style>
 </head>
