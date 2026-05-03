@@ -13,6 +13,9 @@
     "incabar",
     "railway"
   ],
+  "engines": {
+    "node": ">=18.17.0"
+  },
   "author": "",
   "license": "MIT",
   "dependencies": {
