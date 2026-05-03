@@ -392,88 +392,52 @@ function renderMessagePage(entry) {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${escapeHtml(entry.originalName)} | Inca Bar</title>
+  <title>Inca Bar</title>
   <style>
-    :root {
-      color-scheme: light;
-      --bg: #f7efe6;
-      --ink: #22170f;
-      --muted: #705f52;
-      --line: rgba(90, 57, 28, 0.14);
-      --brand: #a95b22;
-      --surface: rgba(255, 255, 255, 0.92);
-      --shadow: 0 24px 60px rgba(50, 31, 12, 0.16);
-    }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      display: grid;
-      place-items: center;
+      display: flex;
+      justify-content: center;
+      align-items: center;
       padding: 20px;
-      font-family: "Outfit", Arial, sans-serif;
-      color: var(--ink);
-      background:
-        radial-gradient(circle at top left, rgba(214, 172, 122, 0.32), transparent 32%),
-        linear-gradient(180deg, #fffaf5 0%, var(--bg) 100%);
+      background: #f5f1eb;
+      font-family: Inter, sans-serif;
     }
-    .frame {
-      width: min(100%, 980px);
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: 28px;
-      box-shadow: var(--shadow);
-      overflow: hidden;
-    }
-    .content {
-      padding: clamp(18px, 4vw, 34px);
-    }
-    .eyebrow {
-      display: inline-flex;
-      padding: 8px 12px;
-      border-radius: 999px;
-      background: rgba(169, 91, 34, 0.1);
-      color: var(--brand);
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-    }
-    h1 {
-      margin: 16px 0 10px;
-      font-size: clamp(28px, 5vw, 48px);
-      line-height: 1;
-    }
-    p {
-      margin: 0 0 24px;
-      color: var(--muted);
-      line-height: 1.65;
-      max-width: 58ch;
-    }
-    .image-wrap {
+    .page {
+      width: min(92%, 900px);
       background: white;
-      border-top: 1px solid var(--line);
-      padding: clamp(12px, 3vw, 22px);
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+      text-align: center;
     }
-    img {
-      display: block;
+    .brand {
+      display: inline-block;
+      padding: 10px 22px;
+      border-radius: 999px;
+      background: #efe5da;
+      color: #8b5a2b;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+    .message-image {
       width: 100%;
       height: auto;
+      max-height: 85vh;
       object-fit: contain;
-      border-radius: 22px;
+      border-radius: 16px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.06);
     }
   </style>
 </head>
 <body>
-  <main class="frame">
-    <div class="content">
-      <span class="eyebrow">Inca Bar</span>
-      <h1>${escapeHtml(entry.originalName)}</h1>
-      <p>Pagina publica da mensagem vinculada a este QR Code individual. O conteudo foi otimizado para abrir bem no celular e manter a imagem centralizada.</p>
-    </div>
-    <div class="image-wrap">
-      <img src="${imageUrl}" alt="${escapeHtml(entry.originalName)}" />
-    </div>
+  <main class="page">
+    <header class="brand">INCA BAR</header>
+    <img src="${imageUrl}" alt="Mensagem Inca Bar" class="message-image" />
   </main>
 </body>
 </html>`;
