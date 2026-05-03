@@ -2,8 +2,7 @@ node_modules/
 .env
 uploads/*
 !uploads/.gitkeep
-qrcodes/*
-!qrcodes/.gitkeep
-public/logo/*
-!public/logo/.gitkeep
-data/uploads.json
+outputs/qrcodes/*
+!outputs/qrcodes/.gitkeep
+branding/*
+!branding/.gitkeep

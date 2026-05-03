@@ -1,16 +1,17 @@
 {
   "name": "gerador-qrcode-incabar",
   "version": "1.0.0",
-  "description": "MVP para upload de imagens e geração de QR Codes do Inca Bar.",
+  "description": "Painel de geracao de QR Codes do Inca Bar para Railway.",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js",
-    "dev": "node --watch app.js"
+    "dev": "nodemon app.js",
+    "start": "node app.js"
   },
   "keywords": [
     "express",
     "qrcode",
-    "incabar"
+    "incabar",
+    "railway"
   ],
   "author": "",
   "license": "MIT",
@@ -23,5 +24,8 @@
     "qrcode": "^1.5.4",
     "sharp": "^0.34.2",
     "slugify": "^1.6.6"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
   }
 }

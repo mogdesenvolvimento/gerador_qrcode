@@ -1,35 +1,47 @@
 # Gerador de QR Codes - Inca Bar
 
-MVP em Node.js + Express para enviar imagens, gerar QR Codes individuais com ou sem logo central e baixar tudo em ZIP.
+Aplicacao Node.js + Express para upload de imagens, geracao de QR Codes individuais com logo opcional e publicacao em producao no dominio `https://qrcode.incabar.com.br`.
 
-## Requisitos
+## Stack
 
-- Node.js 20+ recomendado
-- npm
+- Node.js
+- Express
+- Multer
+- QRCode
+- Sharp
+- Slugify
+- FS-Extra
+- Archiver
 
-## Instalação
+## URLs de producao
+
+- Admin: `https://qrcode.incabar.com.br/admin/qrcodes`
+- Mensagem publica: `https://qrcode.incabar.com.br/mensagem/{slug}`
+- Healthcheck: `https://qrcode.incabar.com.br/health`
+
+## Variaveis de ambiente
+
+Arquivo `.env`:
+
+```env
+BASE_URL=https://qrcode.incabar.com.br
+NODE_ENV=production
+```
+
+No Railway, defina:
+
+- `BASE_URL=https://qrcode.incabar.com.br`
+- `NODE_ENV=production`
+
+O Railway injeta `PORT` automaticamente e a aplicacao escuta em `0.0.0.0:$PORT`.
+
+## Rodando localmente
+
+Instalacao:
 
 ```bash
 npm install
 ```
-
-## Configuração
-
-Crie um arquivo `.env` na raiz:
-
-```env
-BASE_URL=https://incabar.com.br
-PORT=3000
-```
-
-Durante desenvolvimento, você pode usar:
-
-```env
-BASE_URL=http://localhost:3000
-PORT=3000
-```
-
-## Rodando o projeto
 
 Desenvolvimento:
 
@@ -37,41 +49,34 @@ Desenvolvimento:
 npm run dev
 ```
 
-Produção:
+Producao:
 
 ```bash
 npm start
 ```
 
-Painel administrativo:
+Se voce quiser links locais em desenvolvimento, ajuste temporariamente a `BASE_URL` no `.env` antes de iniciar a app.
 
-```txt
-http://localhost:3000/admin/qrcodes
-```
-
-## Fluxo do administrador
-
-1. Enviar várias imagens no painel.
-2. Enviar um logo opcional para o centro dos QR Codes.
-3. Clicar em `Criar QR Codes`.
-4. Conferir a listagem com links e previews.
-5. Baixar o arquivo `qrcodes-incabar.zip`.
-
-## Estrutura
+## Estrutura do projeto
 
 ```txt
 project/
   app.js
   package.json
+  railway.json
   README.md
+  .env
   .env.example
+  /branding
+    logo.png
   /data
     uploads.json
-  /uploads
-  /qrcodes
+    state.json
+  /outputs
+    /qrcodes
   /public
-    /logo
     admin.css
+  /uploads
 ```
 
 ## Rotas
@@ -85,35 +90,68 @@ GET  /admin/download-qrcodes
 GET  /mensagem/:slug
 GET  /uploads/:filename
 GET  /qrcodes/:filename
+GET  /health
 ```
 
-## Observações de produção
+## Fluxo administrativo
 
-- Defina `BASE_URL` com o domínio final, por exemplo `https://incabar.com.br`.
-- Garanta que o proxy ou hospedagem encaminhe o domínio para esta aplicação Node.js.
-- As URLs dos QR Codes sempre usam `BASE_URL`, então a variável precisa apontar para o domínio público correto.
-- O diretório `uploads/` guarda as imagens originais e deve ser persistido em produção.
-- O diretório `qrcodes/` pode ser recriado a qualquer momento pelo botão `Criar QR Codes`.
-- O logo é salvo em `public/logo/current-logo.png` e substituído a cada novo envio.
-
-## Bibliotecas usadas
-
-- Express
-- Multer
-- QRCode
-- Sharp
-- Slugify
-- FS-Extra
-- Archiver
-- Dotenv
+1. Acesse `/admin/qrcodes`.
+2. Envie varias imagens permitidas: `.png`, `.jpg`, `.jpeg`, `.webp`.
+3. Envie um logo opcional para o centro do QR Code.
+4. Clique em `Criar QR Codes`.
+5. Revise link publico, preview da imagem, preview do QR e status.
+6. Baixe `qrcodes-incabar.zip`.
 
 ## Comportamentos implementados
 
-- Upload múltiplo com limite de 10 MB por imagem
-- Tipos aceitos: `.png`, `.jpg`, `.jpeg`, `.webp`
-- Slug amigável com remoção de acentos e caracteres especiais
-- Slugs únicos mesmo com nomes repetidos
-- QR Code em PNG com `errorCorrectionLevel: "H"`
-- Logo central opcional com composição segura para leitura
-- Página pública responsiva por slug
-- ZIP com todos os QR Codes gerados
+- Upload multiplo com limite de 10 MB por imagem
+- Slugs amigaveis com remocao de acentos
+- Slugs unicos com sufixos incrementais: `slug`, `slug-2`, `slug-3`
+- Logo salvo em `/branding/logo.png`
+- QR Codes PNG 1000x1000
+- Error correction level `H`
+- Fundo branco atras do logo para preservar leitura
+- QR Codes salvos em `/outputs/qrcodes`
+- Download ZIP com nomes amigaveis
+- Dashboard com metricas de total de imagens, total de QRs e ultima geracao
+- Healthcheck simples em `/health`
+- Logs padronizados:
+  - `[UPLOAD OK]`
+  - `[LOGO OK]`
+  - `[QR GENERATED]`
+  - `[ZIP READY]`
+  - `[ERROR]`
+
+## Deploy no Railway
+
+1. Conecte o repositorio GitHub ao Railway.
+2. Garanta que o branch publicado existe no GitHub.
+3. Configure `BASE_URL=https://qrcode.incabar.com.br`.
+4. Configure `NODE_ENV=production`.
+5. O arquivo `railway.json` ja define `npm start` como start command.
+6. Gere primeiro um dominio Railway temporario para validar o deploy.
+7. Em Settings > Networking, adicione o dominio customizado `qrcode.incabar.com.br`.
+
+## DNS do dominio customizado
+
+Ao adicionar `qrcode.incabar.com.br` no Railway, a plataforma informa os registros necessarios.
+
+Normalmente:
+
+- um `CNAME` apontando para o dominio Railway fornecido
+- um `TXT` para validacao de propriedade
+
+Crie os registros exatamente como o Railway pedir no DNS do dominio `incabar.com.br`.
+
+## Notas de producao
+
+- Uploads e QR Codes ficam no filesystem do container.
+- Em redeploys ou troca de instancia, esses arquivos podem ser perdidos sem persistencia.
+- Para uso duravel, considere volume persistente no Railway ou armazenamento externo.
+- A pagina publica retorna 404 amigavel se o slug nao existir ou se o arquivo original nao estiver disponivel.
+
+## Referencias Railway
+
+- Variaveis: [Using Variables](https://docs.railway.com/variables)
+- Porta e networking publico: [Public Networking](https://docs.railway.com/public-networking)
+- Dominio customizado e DNS: [railway domain](https://docs.railway.com/cli/domain)
