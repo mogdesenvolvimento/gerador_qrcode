@@ -946,30 +946,35 @@ function renderMessagePage(entry) {
     }
     .message-header {
       width: 100%;
+      max-width: 820px;
+      margin: 0 auto 12px auto;
+      padding: 14px 26px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      margin-bottom: 24px;
+      border-bottom: 1px solid rgba(139, 90, 43, 0.08);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 243, 236, 0.92));
     }
     .brand-badge {
       display: inline-flex;
       align-items: center;
-      padding: 10px 22px;
-      border-radius: 999px;
+      padding: 8px 18px;
+      border-radius: 14px;
       background: #efe5da;
       color: #8b5a2b;
-      font-size: clamp(18px, 3vw, 28px);
+      font-size: 18px;
       font-weight: 700;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      line-height: 1;
       white-space: nowrap;
     }
     .brand-logo {
-      width: clamp(42px, 8vw, 72px);
-      height: auto;
+      width: clamp(38px, 5vw, 56px);
+      height: 56px;
       object-fit: contain;
       flex-shrink: 0;
+      transform: translateY(1px);
     }
     .message-image {
       width: 100%;
@@ -978,6 +983,7 @@ function renderMessagePage(entry) {
       object-fit: contain;
       border-radius: 16px;
       box-shadow: 0 12px 30px rgba(0, 0, 0, 0.06);
+      margin-top: 10px;
     }
   </style>
 </head>
