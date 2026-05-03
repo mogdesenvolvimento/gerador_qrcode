@@ -268,7 +268,37 @@ async function clearHistory() {
   return manifest.length;
 }
 
+function buildInitialToastConfig(notice, error) {
+  if (notice && typeof notice === "object") {
+    return notice;
+  }
+
+  if (error && typeof error === "object") {
+    return error;
+  }
+
+  if (notice) {
+    return {
+      type: "success",
+      title: "Sucesso",
+      message: notice
+    };
+  }
+
+  if (error) {
+    return {
+      type: "error",
+      title: "Erro",
+      message: error
+    };
+  }
+
+  return null;
+}
+
 function renderLayout({ title, body, notice, error }) {
+  const initialToast = buildInitialToastConfig(notice, error);
+
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -281,9 +311,144 @@ function renderLayout({ title, body, notice, error }) {
   <link rel="stylesheet" href="/admin.css" />
 </head>
 <body>
-  ${notice ? `<div class="toast toast-success">${escapeHtml(notice)}</div>` : ""}
-  ${error ? `<div class="toast toast-error">${escapeHtml(error)}</div>` : ""}
+  <div class="notification-center" id="notification-center" aria-live="polite" aria-atomic="true"></div>
   ${body}
+  <script>
+    (() => {
+      const MAX_VISIBLE_TOASTS = 3;
+      const AUTO_CLOSE_MS = 4000;
+      const initialToast = ${JSON.stringify(initialToast)};
+      const notificationCenter = document.getElementById("notification-center");
+      const queue = [];
+      const activeToasts = new Set();
+
+      function getToastIcon(type) {
+        const icons = {
+          success: "✓",
+          error: "!",
+          warning: "!",
+          info: "i"
+        };
+
+        return icons[type] || "i";
+      }
+
+      function showNextToast() {
+        while (activeToasts.size < MAX_VISIBLE_TOASTS && queue.length > 0) {
+          const toast = queue.shift();
+          renderToast(toast);
+        }
+      }
+
+      function renderToast(toast) {
+        const item = document.createElement("article");
+        item.className = "notification-toast notification-" + toast.type;
+        item.innerHTML =
+          '<div class="notification-icon" aria-hidden="true">' + getToastIcon(toast.type) + '</div>' +
+          '<div class="notification-content">' +
+            '<strong>' + toast.title + '</strong>' +
+            '<p>' + toast.message + '</p>' +
+          '</div>' +
+          '<button type="button" class="notification-close" aria-label="Fechar">×</button>';
+
+        notificationCenter.appendChild(item);
+        activeToasts.add(item);
+
+        let closing = false;
+        let remaining = AUTO_CLOSE_MS;
+        let timeoutId = null;
+        let startedAt = Date.now();
+
+        function closeToast() {
+          if (closing) {
+            return;
+          }
+
+          closing = true;
+          item.classList.add("is-leaving");
+          window.setTimeout(() => {
+            item.remove();
+            activeToasts.delete(item);
+            showNextToast();
+          }, 260);
+        }
+
+        function startTimer() {
+          startedAt = Date.now();
+          timeoutId = window.setTimeout(closeToast, remaining);
+        }
+
+        function pauseTimer() {
+          if (!timeoutId) {
+            return;
+          }
+
+          window.clearTimeout(timeoutId);
+          timeoutId = null;
+          remaining -= Date.now() - startedAt;
+        }
+
+        item.addEventListener("mouseenter", pauseTimer);
+        item.addEventListener("mouseleave", () => {
+          if (!closing) {
+            startTimer();
+          }
+        });
+
+        item.querySelector(".notification-close").addEventListener("click", closeToast);
+        window.requestAnimationFrame(() => item.classList.add("is-visible"));
+        startTimer();
+      }
+
+      function showToast(config) {
+        if (!config || !config.title || !config.message) {
+          return;
+        }
+
+        queue.push({
+          type: config.type || "info",
+          title: config.title,
+          message: config.message
+        });
+
+        showNextToast();
+      }
+
+      function rememberToast(config) {
+        try {
+          const key = "incabar:pending-toasts";
+          const pending = JSON.parse(sessionStorage.getItem(key) || "[]");
+          pending.push(config);
+          sessionStorage.setItem(key, JSON.stringify(pending));
+        } catch (error) {
+          console.warn("Nao foi possivel persistir toast.", error);
+        }
+      }
+
+      function flushRememberedToasts() {
+        try {
+          const key = "incabar:pending-toasts";
+          const pending = JSON.parse(sessionStorage.getItem(key) || "[]");
+          sessionStorage.removeItem(key);
+          pending.forEach(showToast);
+        } catch (error) {
+          console.warn("Nao foi possivel recuperar toasts pendentes.", error);
+        }
+      }
+
+      window.NotificationCenter = {
+        showToast,
+        rememberToast
+      };
+      window.showToast = showToast;
+
+      flushRememberedToasts();
+
+      if (initialToast) {
+        showToast(initialToast);
+      }
+    })();
+  </script>
 </body>
 </html>`;
 }
@@ -361,36 +526,87 @@ function renderAdminPage(viewModel, notice, error) {
         <section class="panel">
           <div class="panel-header">
             <div>
-              <h2>Acoes</h2>
-              <p>Fluxo completo para upload, branding, geracao e download em ZIP.</p>
+              <h2>Ações</h2>
+              <p>Fluxo completo para upload, personalização, geração e download dos QR Codes.</p>
             </div>
           </div>
 
           <div class="actions-grid">
-            <form action="/admin/upload-images" method="POST" enctype="multipart/form-data" class="action-card">
-              <h3>Enviar imagens</h3>
-              <p>Upload multiplo com limite de 10 MB e slugs unicos para cada item.</p>
-              <input type="file" name="images" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" multiple required />
-              <button type="submit">Enviar imagens</button>
+            <form action="/admin/upload-images" method="POST" enctype="multipart/form-data" class="action-card action-card-step">
+              <div class="action-step-head">
+                <span class="action-step-badge">Passo 1</span>
+                <span class="action-step-line" aria-hidden="true"></span>
+              </div>
+              <div class="action-card-body">
+                <h3>Enviar imagens</h3>
+                <p>Faça upload de uma ou várias imagens para gerar QR Codes individuais.</p>
+                <span class="action-helper">PNG, JPG, JPEG ou WEBP • até 10 MB por arquivo</span>
+              </div>
+              <label class="upload-field">
+                <input type="file" name="images" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" multiple required data-upload-input />
+                <span class="upload-field-icon" aria-hidden="true">↑</span>
+                <span class="upload-field-copy">
+                  <strong>Clique para selecionar</strong>
+                  <span>ou arraste arquivos aqui</span>
+                </span>
+                <span class="upload-field-status" data-empty-text="Nenhum arquivo selecionado">Nenhum arquivo selecionado</span>
+              </label>
+              <button type="submit" class="action-cta">Enviar imagens</button>
             </form>
 
-            <form action="/admin/upload-logo" method="POST" enctype="multipart/form-data" class="action-card">
-              <h3>Enviar logo</h3>
-              <p>Substitui o logo anterior e salva em <code>/branding/logo.png</code>.</p>
-              <input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" required />
-              <button type="submit">Enviar logo</button>
+            <form action="/admin/upload-logo" method="POST" enctype="multipart/form-data" class="action-card action-card-step">
+              <div class="action-step-head">
+                <span class="action-step-badge">Passo 2</span>
+                <span class="action-step-line" aria-hidden="true"></span>
+              </div>
+              <div class="action-card-body">
+                <h3>Enviar logo</h3>
+                <p>Adicione uma imagem central para personalizar os QR Codes com a identidade do bar.</p>
+                <span class="action-helper">Logo substitui automaticamente o anterior</span>
+              </div>
+              <label class="upload-field">
+                <input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" required data-upload-input />
+                <span class="upload-field-icon" aria-hidden="true">↑</span>
+                <span class="upload-field-copy">
+                  <strong>Clique para selecionar</strong>
+                  <span>ou arraste arquivos aqui</span>
+                </span>
+                <span class="upload-field-status" data-empty-text="Nenhum arquivo selecionado">Nenhum arquivo selecionado</span>
+              </label>
+              <button type="submit" class="action-cta">Enviar logo</button>
             </form>
 
-            <form action="/admin/generate-qrcodes" method="POST" class="action-card">
-              <h3>Criar QR Codes</h3>
-              <p>Gera PNGs 1000x1000 em <code>/outputs/qrcodes</code> com correcao <code>H</code>.</p>
-              <button type="submit">Criar QR Codes</button>
+            <form action="/admin/generate-qrcodes" method="POST" class="action-card action-card-step">
+              <div class="action-step-head">
+                <span class="action-step-badge">Passo 3</span>
+                <span class="action-step-line" aria-hidden="true"></span>
+              </div>
+              <div class="action-card-body">
+                <h3>Criar QR Codes</h3>
+                <p>Gere automaticamente QR Codes individuais a partir das imagens enviadas.</p>
+                <span class="action-helper">Alta resolução • Correção H • Compatível com impressão</span>
+              </div>
+              <div class="action-support action-support-static">
+                <span class="action-support-chip">1000x1000 PNG</span>
+                <span class="action-support-chip">Processamento em lote</span>
+              </div>
+              <button type="submit" class="action-cta">Gerar QR Codes</button>
             </form>
 
-            <a href="/admin/download-qrcodes" class="action-card action-link">
-              <h3>Baixar QR Codes</h3>
-              <p>Entrega instantanea do arquivo <code>qrcodes-incabar.zip</code>.</p>
-              <span class="button-like">Baixar ZIP</span>
+            <a href="/admin/download-qrcodes" class="action-card action-card-step action-link">
+              <div class="action-step-head">
+                <span class="action-step-badge">Passo 4</span>
+              </div>
+              <div class="action-card-body">
+                <h3>Baixar QR Codes</h3>
+                <p>Baixe todos os QR Codes gerados em um único arquivo ZIP.</p>
+                <span class="action-helper">Download instantâneo do pacote completo</span>
+              </div>
+              <div class="action-support action-support-static">
+                <span class="action-support-chip">qrcodes-incabar.zip</span>
+                <span class="action-support-chip">Pronto para impressão</span>
+              </div>
+              <span class="button-like action-cta">Baixar ZIP</span>
             </a>
           </div>
         </section>
@@ -451,6 +667,11 @@ function renderAdminPage(viewModel, notice, error) {
           const modalCopy = document.getElementById("confirm-modal-copy");
           const modalCancelButton = document.getElementById("modal-cancel-button");
           const modalConfirmButton = document.getElementById("modal-confirm-button");
+          const uploadInputs = Array.from(document.querySelectorAll("[data-upload-input]"));
+          const imageUploadForm = document.querySelector('form[action="/admin/upload-images"]');
+          const logoUploadForm = document.querySelector('form[action="/admin/upload-logo"]');
+          const generateForm = document.querySelector('form[action="/admin/generate-qrcodes"]');
+          const downloadLink = document.querySelector('a[href="/admin/download-qrcodes"]');
 
           let currentAction = null;
 
@@ -492,6 +713,33 @@ function renderAdminPage(viewModel, notice, error) {
             document.body.classList.remove("modal-open");
           }
 
+          function updateUploadStatus(input) {
+            const field = input.closest(".upload-field");
+            if (!field) {
+              return;
+            }
+
+            const status = field.querySelector(".upload-field-status");
+            if (!status) {
+              return;
+            }
+
+            const files = Array.from(input.files || []);
+            if (files.length === 0) {
+              status.textContent = status.dataset.emptyText || "Nenhum arquivo selecionado";
+              field.classList.remove("has-files");
+              return;
+            }
+
+            if (files.length === 1) {
+              status.textContent = files[0].name + " selecionado";
+            } else {
+              status.textContent = files.length + " arquivos selecionados";
+            }
+
+            field.classList.add("has-files");
+          }
+
           async function submitJson(url, payload) {
             const response = await fetch(url, {
               method: "POST",
@@ -508,9 +756,71 @@ function renderAdminPage(viewModel, notice, error) {
             return response.json();
           }
 
+          function pushReloadToast(toast) {
+            if (window.NotificationCenter && typeof window.NotificationCenter.rememberToast === "function") {
+              window.NotificationCenter.rememberToast(toast);
+            }
+          }
+
+          function bindSubmitToast(form, toastConfig) {
+            if (!form) {
+              return;
+            }
+
+            form.addEventListener("submit", (event) => {
+              if (form.dataset.submitting === "true") {
+                return;
+              }
+
+              form.dataset.submitting = "true";
+              event.preventDefault();
+
+              if (window.showToast) {
+                window.showToast(toastConfig);
+              }
+
+              window.setTimeout(() => form.submit(), 180);
+            });
+          }
+
           rowCheckboxes.forEach((checkbox) => {
             checkbox.addEventListener("change", updateToolbar);
           });
+
+          uploadInputs.forEach((input) => {
+            updateUploadStatus(input);
+            input.addEventListener("change", () => updateUploadStatus(input));
+          });
+
+          bindSubmitToast(imageUploadForm, {
+            type: "info",
+            title: "Upload iniciado",
+            message: "Processando envio dos arquivos..."
+          });
+
+          bindSubmitToast(logoUploadForm, {
+            type: "info",
+            title: "Informação",
+            message: "Atualizando a personalização dos QR Codes..."
+          });
+
+          bindSubmitToast(generateForm, {
+            type: "info",
+            title: "Informação",
+            message: "Processando geração dos QR Codes..."
+          });
+
+          if (downloadLink) {
+            downloadLink.addEventListener("click", () => {
+              if (window.showToast) {
+                window.showToast({
+                  type: "info",
+                  title: "Download iniciado",
+                  message: "Seu pacote ZIP está sendo preparado."
+                });
+              }
+            });
+          }
 
           if (selectAllCheckbox) {
             selectAllCheckbox.addEventListener("change", () => {
@@ -534,7 +844,12 @@ function renderAdminPage(viewModel, notice, error) {
               onConfirm: async () => {
                 const result = await submitJson("/admin/delete-selected", { slugs });
                 if (result && result.success) {
-                  window.location.href = "/admin/qrcodes?notice=" + encodeURIComponent("Itens selecionados excluídos com sucesso.");
+                  pushReloadToast({
+                    type: "success",
+                    title: "Itens removidos",
+                    message: "Os registros selecionados foram excluídos."
+                  });
+                  window.location.href = "/admin/qrcodes";
                   return;
                 }
                 throw new Error("request_failed");
@@ -550,7 +865,12 @@ function renderAdminPage(viewModel, notice, error) {
               onConfirm: async () => {
                 const result = await submitJson("/admin/clear-history", {});
                 if (result && result.success) {
-                  window.location.href = "/admin/qrcodes?notice=" + encodeURIComponent("Histórico limpo com sucesso.");
+                  pushReloadToast({
+                    type: "success",
+                    title: "Histórico limpo",
+                    message: "Todos os registros foram removidos com sucesso."
+                  });
+                  window.location.href = "/admin/qrcodes";
                   return;
                 }
                 throw new Error("request_failed");
@@ -575,7 +895,13 @@ function renderAdminPage(viewModel, notice, error) {
             try {
               await currentAction();
             } catch (error) {
-              window.location.href = "/admin/qrcodes?error=" + encodeURIComponent("Não foi possível concluir a exclusão. Tente novamente.");
+              if (window.showToast) {
+                window.showToast({
+                  type: "error",
+                  title: "Erro",
+                  message: "Não foi possível concluir a exclusão. Tente novamente."
+                });
+              }
             } finally {
               modalConfirmButton.disabled = false;
               closeModal();
@@ -701,6 +1027,18 @@ function redirectWithMessage(res, type, message) {
   res.redirect(`/admin/qrcodes?${params.toString()}`);
 }
 
+function redirectWithToast(res, config) {
+  const key = config.type === "error" ? "error" : "notice";
+  const payload = JSON.stringify({
+    type: config.type,
+    title: config.title,
+    message: config.message
+  });
+  const params = new URLSearchParams({ [key]: payload });
+
+  res.redirect(`/admin/qrcodes?${params.toString()}`);
+}
+
 function createImageUploadMiddleware() {
   const storage = multer.diskStorage({
     destination: async (req, file, callback) => {
@@ -798,7 +1136,19 @@ app.get("/health", (req, res) => {
 app.get("/admin/qrcodes", async (req, res, next) => {
   try {
     const viewModel = await getDashboardViewModel();
-    res.send(renderAdminPage(viewModel, req.query.notice, req.query.error));
+    const parseToast = (value) => {
+      if (!value) {
+        return null;
+      }
+
+      try {
+        return JSON.parse(value);
+      } catch (error) {
+        return value;
+      }
+    };
+
+    res.send(renderAdminPage(viewModel, parseToast(req.query.notice), parseToast(req.query.error)));
   } catch (error) {
     next(error);
   }
@@ -807,7 +1157,11 @@ app.get("/admin/qrcodes", async (req, res, next) => {
 app.post("/admin/upload-images", createImageUploadMiddleware().array("images", 100), async (req, res, next) => {
   try {
     if (!req.files || req.files.length === 0) {
-      return redirectWithMessage(res, "error", "Selecione ao menos uma imagem para enviar.");
+      return redirectWithToast(res, {
+        type: "warning",
+        title: "Atenção",
+        message: "Selecione ao menos uma imagem para enviar."
+      });
     }
 
     const manifest = await readManifest();
@@ -830,7 +1184,11 @@ app.post("/admin/upload-images", createImageUploadMiddleware().array("images", 1
 
     await writeManifest([...manifest, ...newEntries]);
     logEvent("[UPLOAD OK]", "Imagens recebidas com sucesso.", { total: newEntries.length });
-    return redirectWithMessage(res, "notice", `${newEntries.length} imagem(ns) enviada(s) com sucesso.`);
+    return redirectWithToast(res, {
+      type: "success",
+      title: "Upload concluído",
+      message: "Arquivos enviados com sucesso."
+    });
   } catch (error) {
     next(error);
   }
@@ -839,7 +1197,11 @@ app.post("/admin/upload-images", createImageUploadMiddleware().array("images", 1
 app.post("/admin/upload-logo", logoUpload.single("logo"), async (req, res, next) => {
   try {
     if (!req.file) {
-      return redirectWithMessage(res, "error", "Selecione um arquivo de logo para enviar.");
+      return redirectWithToast(res, {
+        type: "warning",
+        title: "Atenção",
+        message: "Selecione um arquivo de logo para enviar."
+      });
     }
 
     await fs.ensureDir(BRANDING_DIR);
@@ -849,7 +1211,11 @@ app.post("/admin/upload-logo", logoUpload.single("logo"), async (req, res, next)
       .toFile(LOGO_PATH);
 
     logEvent("[LOGO OK]", "Logo atualizado com sucesso.", { file: LOGO_PATH });
-    return redirectWithMessage(res, "notice", "Logo enviado com sucesso e pronto para uso nos QR Codes.");
+    return redirectWithToast(res, {
+      type: "success",
+      title: "Logo atualizado",
+      message: "A personalização dos QR Codes foi atualizada."
+    });
   } catch (error) {
     next(error);
   }
@@ -860,7 +1226,11 @@ app.post("/admin/generate-qrcodes", async (req, res, next) => {
     const manifest = await readManifest();
 
     if (manifest.length === 0) {
-      return redirectWithMessage(res, "error", "Envie imagens antes de gerar os QR Codes.");
+      return redirectWithToast(res, {
+        type: "warning",
+        title: "Atenção",
+        message: "Envie imagens antes de gerar os QR Codes."
+      });
     }
 
     const logoPath = await getCurrentLogo();
@@ -884,7 +1254,11 @@ app.post("/admin/generate-qrcodes", async (req, res, next) => {
     await writeManifest(updatedManifest);
     await writeState({ lastGenerationAt: generatedAt });
 
-    return redirectWithMessage(res, "notice", `${updatedManifest.length} QR Code(s) gerado(s) com sucesso.`);
+    return redirectWithToast(res, {
+      type: "success",
+      title: "QR Codes gerados",
+      message: `${updatedManifest.length} QR Codes gerados com sucesso.`
+    });
   } catch (error) {
     next(error);
   }
@@ -931,7 +1305,11 @@ app.get("/admin/download-qrcodes", async (req, res, next) => {
     }
 
     if (files.length === 0) {
-      return redirectWithMessage(res, "error", "Nenhum QR Code disponivel para download. Gere os arquivos primeiro.");
+      return redirectWithToast(res, {
+        type: "warning",
+        title: "Atenção",
+        message: "Nenhum QR Code disponível para download. Gere os arquivos primeiro."
+      });
     }
 
     res.setHeader("Content-Type", "application/zip");
@@ -980,7 +1358,11 @@ app.use((error, req, res, next) => {
         : "Falha ao processar o upload enviado.";
 
     logEvent("[ERROR]", "Erro de upload.", { code: error.code, message: error.message });
-    return redirectWithMessage(res, "error", message);
+    return redirectWithToast(res, {
+      type: "error",
+      title: "Erro",
+      message
+    });
   }
 
   if (error) {
@@ -992,7 +1374,11 @@ app.use((error, req, res, next) => {
     }
 
     if (req.path.startsWith("/admin")) {
-      return redirectWithMessage(res, "error", error.message || "Ocorreu um erro inesperado.");
+      return redirectWithToast(res, {
+        type: "error",
+        title: "Erro",
+        message: error.message || "Não foi possível concluir a operação."
+      });
     }
 
     return res.status(500).send("Erro interno do servidor.");
