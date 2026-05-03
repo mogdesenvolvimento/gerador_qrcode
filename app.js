@@ -958,7 +958,8 @@ function renderMessagePage(entry) {
       gap: 12px;
       border-radius: 18px;
       border-bottom: 1px solid rgba(139, 90, 43, 0.08);
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 243, 236, 0.9));
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(248, 243, 236, 0.58));
+      backdrop-filter: blur(10px);
     }
     .brand-badge {
       display: inline-flex;
@@ -969,7 +970,7 @@ function renderMessagePage(entry) {
       border-radius: 999px;
       background: #efe5da;
       color: #8b5a2b;
-      font-size: clamp(14px, 4vw, 18px);
+      font-size: clamp(12px, 3.2vw, 16px);
       font-weight: 700;
       letter-spacing: 0.12em;
       line-height: 1;
@@ -999,8 +1000,8 @@ function renderMessagePage(entry) {
       }
       .brand-badge {
         padding: 8px 12px;
-        font-size: 14px;
-        letter-spacing: 0.10em;
+        font-size: 12px;
+        letter-spacing: 0.08em;
       }
       .brand-logo {
         width: 40px;
