@@ -210,9 +210,62 @@ async function getDashboardViewModel() {
       totalImages: entries.length,
       totalGenerated: qrCount,
       lastGenerationAt: state.lastGenerationAt
-    },
-    logoExists: Boolean(await getCurrentLogo())
+    }
   };
+}
+
+async function removeFileIfExists(filePath) {
+  if (await fs.pathExists(filePath)) {
+    await fs.remove(filePath);
+  }
+}
+
+async function removeEntryAssets(entry) {
+  const uploadPath = path.join(UPLOADS_DIR, entry.storedFilename);
+  const qrPath = path.join(QRCODES_DIR, `${entry.slug}-qr.png`);
+  await removeFileIfExists(uploadPath);
+  await removeFileIfExists(qrPath);
+}
+
+async function recalculateStateFromEntries(entries) {
+  const latestGeneratedAt = entries
+    .map((entry) => entry.qrGeneratedAt)
+    .filter(Boolean)
+    .sort()
+    .pop() || null;
+
+  await writeState({ lastGenerationAt: latestGeneratedAt });
+}
+
+async function deleteEntriesBySlugs(slugs) {
+  const manifest = await readManifest();
+  const slugSet = new Set(slugs);
+  const entriesToDelete = manifest.filter((entry) => slugSet.has(entry.slug));
+
+  for (const entry of entriesToDelete) {
+    await removeEntryAssets(entry);
+  }
+
+  const nextManifest = manifest.filter((entry) => !slugSet.has(entry.slug));
+  await writeManifest(nextManifest);
+  await recalculateStateFromEntries(nextManifest);
+
+  return entriesToDelete.length;
+}
+
+async function clearHistory() {
+  const manifest = await readManifest();
+
+  for (const entry of manifest) {
+    await removeEntryAssets(entry);
+  }
+
+  await writeManifest([]);
+  await writeState({ lastGenerationAt: null });
+  await fs.ensureDir(UPLOADS_DIR);
+  await fs.ensureDir(QRCODES_DIR);
+
+  return manifest.length;
 }
 
 function renderLayout({ title, body, notice, error }) {
@@ -236,14 +289,17 @@ function renderLayout({ title, body, notice, error }) {
 }
 
 function renderAdminPage(viewModel, notice, error) {
-  const { entries, stats, logoExists } = viewModel;
+  const { entries, stats } = viewModel;
   const hasEntries = entries.length > 0;
 
   const rows = hasEntries
     ? entries
         .map(
           (entry) => `
-            <tr>
+            <tr data-row-slug="${escapeHtml(entry.slug)}">
+              <td class="checkbox-cell">
+                <input type="checkbox" class="row-checkbox" value="${escapeHtml(entry.slug)}" aria-label="Selecionar ${escapeHtml(entry.slug)}" />
+              </td>
               <td>
                 <div class="thumb-card">
                   <img src="${entry.imageUrl}" alt="${escapeHtml(entry.originalName)}" class="thumb-image" />
@@ -271,7 +327,7 @@ function renderAdminPage(viewModel, notice, error) {
         .join("")
     : `
       <tr>
-        <td colspan="6">
+        <td colspan="7">
           <div class="empty-state">
             <h3>Nenhuma imagem enviada ainda</h3>
             <p>Envie as imagens para comecar a gerar os QR Codes do Inca Bar.</p>
@@ -288,30 +344,16 @@ function renderAdminPage(viewModel, notice, error) {
       <main class="shell">
         <section class="hero">
           <div class="hero-copy-wrap">
-            <p class="eyebrow">Inca Bar | QR Codes em producao</p>
-            <h1>Painel administrativo premium para gerar QR Codes individuais.</h1>
-            <p class="hero-copy">Suba varias imagens, envie o logo do bar, gere os QR Codes em lote e baixe tudo pronto para impressao no dominio oficial.</p>
-            <div class="hero-badges">
-              <span class="hero-pill">${escapeHtml(BASE_URL)}</span>
-              <span class="hero-pill">${logoExists ? "Logo ativo" : "Sem logo enviado"}</span>
-            </div>
+            <p class="eyebrow">Inca Bar</p>
+            <h1>Aplicação para Gerar QR Codes</h1>
+            <p class="hero-copy">Suba várias imagens, envie o logo, gere os QR Codes em lote e baixe tudo pronto para impressão.</p>
           </div>
 
-          <div class="stats-grid">
+          <div class="hero-side">
             <article class="stat-card">
-              <span class="stat-label">Total de imagens</span>
-              <strong>${stats.totalImages}</strong>
-              <span class="stat-meta">Uploads prontos para publicacao</span>
-            </article>
-            <article class="stat-card">
-              <span class="stat-label">QR gerados</span>
-              <strong>${stats.totalGenerated}</strong>
-              <span class="stat-meta">Arquivos prontos para impressao</span>
-            </article>
-            <article class="stat-card stat-card-wide">
-              <span class="stat-label">Ultima geracao</span>
+              <span class="stat-label">Última geração</span>
               <strong>${escapeHtml(formatDateTime(stats.lastGenerationAt))}</strong>
-              <span class="stat-meta">Atualizado sempre que o lote e recriado</span>
+              <span class="stat-meta">Atualizado sempre que o lote é recriado</span>
             </article>
           </div>
         </section>
@@ -359,12 +401,19 @@ function renderAdminPage(viewModel, notice, error) {
               <h2>Galeria administrativa</h2>
               <p>${hasEntries ? `${entries.length} registro(s) acompanhados neste painel.` : "Os itens enviados aparecem aqui com link publico e preview do QR."}</p>
             </div>
+            <div class="panel-tools">
+              <button type="button" class="toolbar-button toolbar-button-danger" id="delete-selected-button" disabled>Excluir selecionados</button>
+              <button type="button" class="toolbar-button" id="clear-history-button" ${hasEntries ? "" : "disabled"}>Limpar histórico</button>
+            </div>
           </div>
 
           <div class="table-wrap">
-            <table>
+            <table id="gallery-table">
               <thead>
                 <tr>
+                  <th class="checkbox-cell">
+                    <input type="checkbox" id="select-all-checkbox" aria-label="Selecionar todos" ${hasEntries ? "" : "disabled"} />
+                  </th>
                   <th>Imagem</th>
                   <th>Nome</th>
                   <th>Slug</th>
@@ -379,7 +428,163 @@ function renderAdminPage(viewModel, notice, error) {
             </table>
           </div>
         </section>
+
+        <div class="modal-backdrop" id="confirm-modal" hidden>
+          <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+            <h3 id="confirm-modal-title"></h3>
+            <p id="confirm-modal-copy"></p>
+            <div class="modal-actions">
+              <button type="button" class="toolbar-button toolbar-button-secondary" id="modal-cancel-button">Cancelar</button>
+              <button type="button" class="toolbar-button toolbar-button-danger" id="modal-confirm-button">Confirmar exclusão</button>
+            </div>
+          </div>
+        </div>
       </main>
+      <script>
+        (() => {
+          const rowCheckboxes = Array.from(document.querySelectorAll(".row-checkbox"));
+          const selectAllCheckbox = document.getElementById("select-all-checkbox");
+          const deleteSelectedButton = document.getElementById("delete-selected-button");
+          const clearHistoryButton = document.getElementById("clear-history-button");
+          const modal = document.getElementById("confirm-modal");
+          const modalTitle = document.getElementById("confirm-modal-title");
+          const modalCopy = document.getElementById("confirm-modal-copy");
+          const modalCancelButton = document.getElementById("modal-cancel-button");
+          const modalConfirmButton = document.getElementById("modal-confirm-button");
+
+          let currentAction = null;
+
+          function getSelectedSlugs() {
+            return rowCheckboxes.filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.value);
+          }
+
+          function updateToolbar() {
+            const selectedCount = getSelectedSlugs().length;
+            deleteSelectedButton.disabled = selectedCount === 0;
+            deleteSelectedButton.textContent = selectedCount > 0
+              ? "Excluir selecionados (" + selectedCount + ")"
+              : "Excluir selecionados";
+
+            if (!selectAllCheckbox) {
+              return;
+            }
+
+            const total = rowCheckboxes.length;
+            const allChecked = total > 0 && selectedCount === total;
+            const partiallyChecked = selectedCount > 0 && selectedCount < total;
+
+            selectAllCheckbox.checked = allChecked;
+            selectAllCheckbox.indeterminate = partiallyChecked;
+          }
+
+          function openModal(config) {
+            currentAction = config.onConfirm;
+            modalTitle.textContent = config.title;
+            modalCopy.textContent = config.copy;
+            modalConfirmButton.textContent = config.confirmLabel;
+            modal.hidden = false;
+            document.body.classList.add("modal-open");
+          }
+
+          function closeModal() {
+            modal.hidden = true;
+            currentAction = null;
+            document.body.classList.remove("modal-open");
+          }
+
+          async function submitJson(url, payload) {
+            const response = await fetch(url, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              throw new Error("request_failed");
+            }
+
+            return response.json();
+          }
+
+          rowCheckboxes.forEach((checkbox) => {
+            checkbox.addEventListener("change", updateToolbar);
+          });
+
+          if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener("change", () => {
+              rowCheckboxes.forEach((checkbox) => {
+                checkbox.checked = selectAllCheckbox.checked;
+              });
+              updateToolbar();
+            });
+          }
+
+          deleteSelectedButton.addEventListener("click", () => {
+            const slugs = getSelectedSlugs();
+            if (slugs.length === 0) {
+              return;
+            }
+
+            openModal({
+              title: "Deseja excluir os itens selecionados?",
+              copy: "Essa ação removerá as imagens, os QR Codes e os links públicos vinculados aos registros selecionados. Essa ação não poderá ser desfeita.",
+              confirmLabel: "Confirmar exclusão",
+              onConfirm: async () => {
+                const result = await submitJson("/admin/delete-selected", { slugs });
+                if (result && result.success) {
+                  window.location.href = "/admin/qrcodes?notice=" + encodeURIComponent("Itens selecionados excluídos com sucesso.");
+                  return;
+                }
+                throw new Error("request_failed");
+              }
+            });
+          });
+
+          clearHistoryButton.addEventListener("click", () => {
+            openModal({
+              title: "Deseja limpar todo o histórico?",
+              copy: "Essa ação removerá todas as imagens, todos os QR Codes e todos os links públicos gerados. Essa ação não poderá ser desfeita.",
+              confirmLabel: "Limpar histórico",
+              onConfirm: async () => {
+                const result = await submitJson("/admin/clear-history", {});
+                if (result && result.success) {
+                  window.location.href = "/admin/qrcodes?notice=" + encodeURIComponent("Histórico limpo com sucesso.");
+                  return;
+                }
+                throw new Error("request_failed");
+              }
+            });
+          });
+
+          modalCancelButton.addEventListener("click", closeModal);
+          modal.addEventListener("click", (event) => {
+            if (event.target === modal) {
+              closeModal();
+            }
+          });
+
+          modalConfirmButton.addEventListener("click", async () => {
+            if (!currentAction) {
+              return;
+            }
+
+            modalConfirmButton.disabled = true;
+
+            try {
+              await currentAction();
+            } catch (error) {
+              window.location.href = "/admin/qrcodes?error=" + encodeURIComponent("Não foi possível concluir a exclusão. Tente novamente.");
+            } finally {
+              modalConfirmButton.disabled = false;
+              closeModal();
+            }
+          });
+
+          updateToolbar();
+        })();
+      </script>
     `
   });
 }
@@ -685,6 +890,32 @@ app.post("/admin/generate-qrcodes", async (req, res, next) => {
   }
 });
 
+app.post("/admin/delete-selected", async (req, res, next) => {
+  try {
+    const slugs = Array.isArray(req.body.slugs) ? req.body.slugs.filter(Boolean) : [];
+
+    if (slugs.length === 0) {
+      return res.status(400).json({ success: false, message: "Nenhum slug informado." });
+    }
+
+    const deletedCount = await deleteEntriesBySlugs(slugs);
+    logEvent("[DELETE OK]", "Itens selecionados excluidos com sucesso.", { total: deletedCount, slugs });
+    return res.json({ success: true, deletedCount });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/admin/clear-history", async (req, res, next) => {
+  try {
+    const deletedCount = await clearHistory();
+    logEvent("[DELETE OK]", "Historico limpo com sucesso.", { total: deletedCount });
+    return res.json({ success: true, deletedCount });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/admin/download-qrcodes", async (req, res, next) => {
   try {
     const manifest = await readManifest();
@@ -754,6 +985,11 @@ app.use((error, req, res, next) => {
 
   if (error) {
     logEvent("[ERROR]", "Falha inesperada na aplicacao.", { message: error.message, path: req.path });
+
+    const expectsJson = req.path === "/admin/delete-selected" || req.path === "/admin/clear-history";
+    if (expectsJson) {
+      return res.status(500).json({ success: false, message: "Nao foi possivel concluir a exclusao." });
+    }
 
     if (req.path.startsWith("/admin")) {
       return redirectWithMessage(res, "error", error.message || "Ocorreu um erro inesperado.");
