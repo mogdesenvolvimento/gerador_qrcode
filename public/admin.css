@@ -360,6 +360,35 @@ code {
   color: var(--muted);
 }
 
+.action-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.text-field {
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid rgba(126, 67, 23, 0.16);
+  border-radius: 14px;
+  padding: 13px 14px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text);
+  font: inherit;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.text-field:focus {
+  outline: none;
+  border-color: rgba(126, 67, 23, 0.38);
+  box-shadow: 0 0 0 4px rgba(180, 104, 45, 0.08);
+  transform: translateY(-1px);
+}
+
+.text-field::placeholder {
+  color: rgba(114, 98, 85, 0.9);
+}
+
 .action-support {
   min-height: 86px;
   padding: 16px;
@@ -484,6 +513,14 @@ tbody td {
 .thumb-card-qr {
   width: 110px;
   height: 110px;
+}
+
+.thumb-card-link {
+  background: linear-gradient(180deg, #fffaf5, #f4e7d8);
+  color: var(--brand-deep);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  font-size: 0.82rem;
 }
 
 .thumb-image {

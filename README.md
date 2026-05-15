@@ -99,9 +99,10 @@ GET  /health
 1. Acesse `/admin/qrcodes`.
 2. Envie varias imagens permitidas: `.png`, `.jpg`, `.jpeg`, `.webp`.
 3. Envie um logo opcional para o centro do QR Code.
-4. Clique em `Criar QR Codes`.
-5. Revise link publico, preview da imagem, preview do QR e status.
-6. Baixe `qrcodes-incabar.zip`.
+4. Cadastre links externos de sites ou aplicativos web quando quiser gerar QR Codes diretos para URL.
+5. Clique em `Criar QR Codes`.
+6. Revise link publico, preview da imagem, preview do QR e status.
+7. Baixe `qrcodes-incabar.zip`.
 
 ## Comportamentos implementados
 
@@ -109,6 +110,7 @@ GET  /health
 - Slugs amigaveis com remocao de acentos
 - Slugs unicos com sufixos incrementais: `slug`, `slug-2`, `slug-3`
 - Logo salvo em `/branding/logo.png`
+- Cadastro de URLs externas para QR Codes de sites e aplicativos web
 - QR Codes PNG 1000x1000
 - Error correction level `H`
 - Fundo branco atras do logo para preservar leitura

@@ -106,6 +106,34 @@ function createStoredFilename(originalName) {
   return `${base}-${Date.now()}-${Math.round(Math.random() * 1e6)}${extension}`;
 }
 
+function getEntryType(entry) {
+  return entry.entryType || "image";
+}
+
+function isImageEntry(entry) {
+  return getEntryType(entry) === "image";
+}
+
+function isUrlEntry(entry) {
+  return getEntryType(entry) === "url";
+}
+
+function normalizeExternalUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+  try {
+    const parsed = new URL(withProtocol);
+    return parsed.toString();
+  } catch (error) {
+    return "";
+  }
+}
+
 function buildPublicMessageUrl(slug) {
   assertBaseUrl();
   return `${BASE_URL}/mensagem/${slug}`;
@@ -196,9 +224,10 @@ async function getDashboardViewModel() {
 
       return {
         ...entry,
-        status: qrExists ? "QR gerado" : "Enviado",
-        publicUrl: buildPublicMessageUrl(entry.slug),
-        imageUrl: buildFileUrl("uploads", entry.storedFilename),
+        entryType: getEntryType(entry),
+        status: qrExists ? "QR gerado" : isUrlEntry(entry) ? "Link cadastrado" : "Enviado",
+        publicUrl: isUrlEntry(entry) ? entry.targetUrl : buildPublicMessageUrl(entry.slug),
+        imageUrl: isImageEntry(entry) && entry.storedFilename ? buildFileUrl("uploads", entry.storedFilename) : null,
         qrUrl: qrExists ? buildFileUrl("qrcodes", qrFilename) : null
       };
     })
@@ -221,9 +250,11 @@ async function removeFileIfExists(filePath) {
 }
 
 async function removeEntryAssets(entry) {
-  const uploadPath = path.join(UPLOADS_DIR, entry.storedFilename);
   const qrPath = path.join(QRCODES_DIR, `${entry.slug}-qr.png`);
-  await removeFileIfExists(uploadPath);
+  if (entry.storedFilename) {
+    const uploadPath = path.join(UPLOADS_DIR, entry.storedFilename);
+    await removeFileIfExists(uploadPath);
+  }
   await removeFileIfExists(qrPath);
 }
 
@@ -466,14 +497,16 @@ function renderAdminPage(viewModel, notice, error) {
                 <input type="checkbox" class="row-checkbox" value="${escapeHtml(entry.slug)}" aria-label="Selecionar ${escapeHtml(entry.slug)}" />
               </td>
               <td>
-                <div class="thumb-card">
-                  <img src="${entry.imageUrl}" alt="${escapeHtml(entry.originalName)}" class="thumb-image" />
-                </div>
+                ${
+                  entry.imageUrl
+                    ? `<div class="thumb-card"><img src="${entry.imageUrl}" alt="${escapeHtml(entry.originalName)}" class="thumb-image" /></div>`
+                    : `<div class="thumb-card thumb-card-link"><span>URL</span></div>`
+                }
               </td>
               <td>
                 <div class="cell-stack">
                   <strong>${escapeHtml(entry.originalName)}</strong>
-                  <span>${escapeHtml(entry.storedFilename)}</span>
+                  <span>${escapeHtml(entry.storedFilename || entry.targetUrl || "")}</span>
                 </div>
               </td>
               <td><code>${escapeHtml(entry.slug)}</code></td>
@@ -576,14 +609,31 @@ function renderAdminPage(viewModel, notice, error) {
               <button type="submit" class="action-cta">Enviar logo</button>
             </form>
 
-            <form action="/admin/generate-qrcodes" method="POST" class="action-card action-card-step">
+            <form action="/admin/add-link" method="POST" class="action-card action-card-step">
               <div class="action-step-head">
                 <span class="action-step-badge">Passo 3</span>
                 <span class="action-step-line" aria-hidden="true"></span>
               </div>
               <div class="action-card-body">
+                <h3>Adicionar link</h3>
+                <p>Cadastre uma URL de site ou aplicativo web para gerar um QR Code direto para esse endereço.</p>
+                <span class="action-helper">Aceita links externos com https:// ou domínio simples</span>
+              </div>
+              <div class="action-form-fields">
+                <input type="text" name="linkLabel" class="text-field" placeholder="Nome do link" maxlength="120" required />
+                <input type="url" name="linkUrl" class="text-field" placeholder="https://meusite.com.br" required />
+              </div>
+              <button type="submit" class="action-cta">Salvar link</button>
+            </form>
+
+            <form action="/admin/generate-qrcodes" method="POST" class="action-card action-card-step">
+              <div class="action-step-head">
+                <span class="action-step-badge">Passo 4</span>
+                <span class="action-step-line" aria-hidden="true"></span>
+              </div>
+              <div class="action-card-body">
                 <h3>Criar QR Codes</h3>
-                <p>Gere automaticamente QR Codes individuais a partir das imagens enviadas.</p>
+                <p>Gere automaticamente QR Codes individuais a partir das imagens enviadas e dos links cadastrados.</p>
                 <span class="action-helper">Alta resolução • Correção H • Compatível com impressão</span>
               </div>
               <div class="action-support action-support-static">
@@ -595,7 +645,7 @@ function renderAdminPage(viewModel, notice, error) {
 
             <a href="/admin/download-qrcodes" class="action-card action-card-step action-link">
               <div class="action-step-head">
-                <span class="action-step-badge">Passo 4</span>
+                <span class="action-step-badge">Passo 5</span>
               </div>
               <div class="action-card-body">
                 <h3>Baixar QR Codes</h3>
@@ -670,6 +720,7 @@ function renderAdminPage(viewModel, notice, error) {
           const uploadInputs = Array.from(document.querySelectorAll("[data-upload-input]"));
           const imageUploadForm = document.querySelector('form[action="/admin/upload-images"]');
           const logoUploadForm = document.querySelector('form[action="/admin/upload-logo"]');
+          const linkForm = document.querySelector('form[action="/admin/add-link"]');
           const generateForm = document.querySelector('form[action="/admin/generate-qrcodes"]');
           const downloadLink = document.querySelector('a[href="/admin/download-qrcodes"]');
 
@@ -802,6 +853,12 @@ function renderAdminPage(viewModel, notice, error) {
             type: "info",
             title: "Informação",
             message: "Atualizando a personalização dos QR Codes..."
+          });
+
+          bindSubmitToast(linkForm, {
+            type: "info",
+            title: "Link em processamento",
+            message: "Validando e cadastrando a URL informada..."
           });
 
           bindSubmitToast(generateForm, {
@@ -1280,6 +1337,47 @@ app.post("/admin/upload-logo", logoUpload.single("logo"), async (req, res, next)
   }
 });
 
+app.post("/admin/add-link", async (req, res, next) => {
+  try {
+    const label = String(req.body.linkLabel || "").trim();
+    const targetUrl = normalizeExternalUrl(req.body.linkUrl);
+
+    if (!label || !targetUrl) {
+      return redirectWithToast(res, {
+        type: "warning",
+        title: "Atenção",
+        message: "Informe um nome e uma URL válida para cadastrar o link."
+      });
+    }
+
+    const manifest = await readManifest();
+    const usedSlugs = new Set(manifest.map((entry) => entry.slug));
+    const slug = createUniqueSlug(normalizeSlug(label), usedSlugs);
+
+    const newEntry = {
+      entryType: "url",
+      slug,
+      originalName: label,
+      targetUrl,
+      storedFilename: null,
+      mimeType: "text/url",
+      size: 0,
+      createdAt: new Date().toISOString(),
+      qrGeneratedAt: null
+    };
+
+    await writeManifest([...manifest, newEntry]);
+    logEvent("[LINK OK]", "Link externo cadastrado com sucesso.", { slug, targetUrl });
+    return redirectWithToast(res, {
+      type: "success",
+      title: "Link cadastrado",
+      message: "A URL foi adicionada com sucesso e já pode gerar QR Code."
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/admin/generate-qrcodes", async (req, res, next) => {
   try {
     const manifest = await readManifest();
@@ -1299,7 +1397,7 @@ app.post("/admin/generate-qrcodes", async (req, res, next) => {
     await fs.ensureDir(QRCODES_DIR);
 
     for (const entry of manifest) {
-      const publicUrl = buildPublicMessageUrl(entry.slug);
+      const publicUrl = isUrlEntry(entry) ? entry.targetUrl : buildPublicMessageUrl(entry.slug);
       const outputPath = path.join(QRCODES_DIR, `${entry.slug}-qr.png`);
       const qrBuffer = await generateQrWithOptionalLogo(publicUrl, logoPath);
       await fs.writeFile(outputPath, qrBuffer);
@@ -1394,7 +1492,7 @@ app.get("/mensagem/:slug", async (req, res, next) => {
     const manifest = await readManifest();
     const entry = manifest.find((item) => item.slug === req.params.slug);
 
-    if (!entry) {
+    if (!entry || isUrlEntry(entry)) {
       return res.status(404).send(renderNotFoundPage(req.params.slug));
     }
 
